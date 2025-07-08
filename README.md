@@ -18,9 +18,8 @@ ends up being extremely simple, so for the sake of my understanding I decided
 to write it this way.
 
 The round-trip guarantee assumes the round-to-even tie-breaking policy for
-the parsers. It also makes no attempt to provide the nearest decimal
-representation in the event that multiple shortest ones exist that give the
-round-trip guarantee.
+the parser. It also makes no attempt to provide the nearest decimal
+representation in the event that multiple valid shortest ones exist.
 
 ## Usage
 
