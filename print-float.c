@@ -18,10 +18,75 @@ static void reverse(char* a, char* b) {
   }
 }
 
+static __uint128_t pow5(u32 p, i32 leave_gap, i32* reduced) {
+  __uint128_t ans = 1;
+  __uint128_t n = 5;
+  while (p) {
+    if (p & 1)
+      ans *= n;
+    n *= n;
+    p /= 2;
+  }
+  if (ans >> 64) {
+    u32 buf = __builtin_clzll(ans >> 64);
+    if (buf < leave_gap) {
+      i32 shift = leave_gap - buf;
+      ans >>= shift;
+      *reduced = shift;
+      return ans;
+    }
+  }
+  *reduced = 0;
+  return ans;
+}
+
 // computes `a * 2^b / 10^c`
-static f64 calc(f64 a, i32 b, i32 c) {
-  a *= pow(2, b - c);
-  return c > 0 ? a / pow(5, c) : a * pow(5, -c);
+static u32 floor2(u32 a, i32 b, i32 c) {
+  b -= c;
+  __uint128_t ans = a;
+  i32 prec = 32 - __builtin_clz(a);
+  if (c > 0) {
+    i32 shiftup = 128 - prec;
+    b -= shiftup;
+    ans <<= shiftup;
+    i32 red;
+    __uint128_t den = pow5(c, prec, &red);
+    ans /= den;
+    b -= red;
+  } else if (c < 0) {
+    i32 red;
+    __uint128_t p = pow5((u32) -c, prec, &red);
+    ans *= p;
+    b += red;
+  }
+  if (b < 0)
+    return (u32) (ans >> -b);
+  return (u32) (ans << b);
+}
+
+static u32 ceil2(u32 a, i32 b, i32 c) {
+  b -= c;
+  __uint128_t ans = a;
+  i32 prec = 32 - __builtin_clz(a);
+  bool bump = 0;
+  if (c > 0) {
+    i32 shiftup = 128 - prec;
+    b -= shiftup;
+    ans <<= shiftup;
+    i32 red;
+    __uint128_t den = pow5(c, prec, &red);
+    bump = !!(ans % den);
+    ans /= den;
+    b -= red;
+  } else if (c < 0) {
+    i32 red;
+    __uint128_t p = pow5((u32) -c, prec, &red);
+    ans *= p;
+    b += red;
+  }
+  if (b < 0)
+    return (u32) (ans >> -b) + (!!(ans & (((__uint128_t) 1 << -b) - 1)) || bump);
+  return (u32) (ans << b);
 }
 
 static i32 floor_div(i32 a, i32 b) { return a / b - (a % b && (a ^ b) < 0); }
@@ -65,31 +130,25 @@ static char* float_to_string(f32 x, char* buffer) {
   // check if at bottom of exponent range (denser floats below)
   // this influences the interval width `exp10`, and the lower bound value `lo`
   i32 exp10;
-  f64 lo;
   if (sig_bits) {
     exp10 = floor_div(exp2 * 30103, 100000);
-    lo = calc(2 * sig2 - 1, exp2 - 1, exp10);
   } else {
     exp10 = floor_div((exp2 - 2) * 30103 + 47712, 100000);
-    lo = calc(4 * sig2 - 1, exp2 - 2, exp10);
   }
-
-  // interval upper bound `hi` is always determined by current exponent
-  f64 hi = calc(2 * sig2 + 1, exp2 - 1, exp10);
 
   u32 a, b;
   if (sig_bits & 1) {  // odd, round away -> open interval
-    a = (u32) floor(lo) + 1;
-    b = (u32) ceil(hi) - 1;
+    a = (sig_bits ? floor2(2 * sig2 - 1, exp2 - 1, exp10) : floor2(4 * sig2 - 1, exp2 - 2, exp10)) + 1;
+    b = ceil2(2 * sig2 + 1, exp2 - 1, exp10) - 1;
   } else {  // even, round towards -> closed interval
-    a = (u32) ceil(lo);
-    b = (u32) floor(hi);
+    a = sig_bits ? ceil2(2 * sig2 - 1, exp2 - 1, exp10) : ceil2(4 * sig2 - 1, exp2 - 2, exp10);
+    b = floor2(2 * sig2 + 1, exp2 - 1, exp10);
   }
 
   u32 d = b / 10;  // power of 10 candidate
 
   u32 sig10;
-  if (d * 10 > a) {
+  if (d * 10 >= a) {
     sig10 = d;
     ++exp10;
   } else {
@@ -98,6 +157,7 @@ static char* float_to_string(f32 x, char* buffer) {
     // this would be the place to do it, using round(calc(sig2, exp2, exp10))).
     sig10 = b;
   }
+
 
   while (!(sig10 % 10)) {  // divide off extra 0s
     sig10 /= 10;
@@ -150,7 +210,7 @@ int main() {
   u32 max_norm = 0b11111111 << 23;
   u32 pct = 0;
   u32 next = 0;
-  for (u32 i = 0; i < max_norm; ++i) {
+  for (u32 i = 0; i < max_norm; i += 10000000) {
     if (i >= next) {
       printf("%u%%\n", pct);
       next = (u32) ((u64) max_norm * ++pct / 100);
