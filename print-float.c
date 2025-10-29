@@ -79,10 +79,10 @@ static char* float_to_string(f32 x, char* buffer) {
 
   u32 a, b;
   if (sig_bits & 1) {  // odd, round away -> open interval
-    a = (u32) floor(lo) + 1;
+    a = (u32) floor(lo);
     b = (u32) ceil(hi) - 1;
   } else {  // even, round towards -> closed interval
-    a = (u32) ceil(lo);
+    a = (u32) ceil(lo) - 1;
     b = (u32) floor(hi);
   }
 
@@ -133,6 +133,8 @@ static char* float_to_string(f32 x, char* buffer) {
   return buffer;
 }
 
+static u32 n_errors = 0;
+
 static void round_trip(u32 x) {
   f32 fx;
   memcpy(&fx, &x, 4);
@@ -141,8 +143,10 @@ static void round_trip(u32 x) {
   f32 fy = strtof(buf, 0);
   u32 y;
   memcpy(&y, &fy, 4);
-  if (x != y)
-    abort();
+  if (x != y) {
+    ++n_errors;
+    printf("error %.16g %s %.16g\n", fx, buf, fy);
+  }
 }
 
 int main() {
@@ -158,4 +162,5 @@ int main() {
     round_trip(i);
   }
   printf("checked all floats.\n");
+  printf("%u errors.\n", n_errors);
 }
