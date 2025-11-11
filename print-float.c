@@ -18,6 +18,14 @@ static void reverse(char* a, char* b) {
   }
 }
 
+static f64 bump(f64 x, i32 d) {
+  u64 y;
+  memcpy(&y, &x, 8);
+  y += d;
+  memcpy(&x, &y, 8);
+  return x;
+}
+
 // computes `a * 2^b / 10^c`
 static f64 calc(f64 a, i32 b, i32 c) {
   a *= pow(2, b - c);
@@ -76,6 +84,9 @@ static char* float_to_string(f32 x, char* buffer) {
 
   // interval upper bound `hi` is always determined by current exponent
   f64 hi = calc(2 * sig2 + 1, exp2 - 1, exp10);
+
+  lo = bump(lo, 1);
+  hi = bump(hi, -1);
 
   u32 a, b;
   if (sig_bits & 1) {  // odd, round away -> open interval
